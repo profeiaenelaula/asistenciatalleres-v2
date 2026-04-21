@@ -11,6 +11,7 @@ function MainLayout() {
   const isLoginPage = location.pathname === '/login' || location.pathname === '/';
 
   const handleLogout = () => {
+    // Para el mock simplemente redirigimos al login
     navigate('/login');
   };
 

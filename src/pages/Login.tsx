@@ -19,6 +19,7 @@ export default function Login() {
       }
     }
 
+    // Convert Username to pseudo-email
     const email = `${username.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@docentes.jec.cl`;
     
     const { data, error } = await supabase.auth.signInWithPassword({
