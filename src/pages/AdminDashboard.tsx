@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Calendar, UploadCloud, GraduationCap, ChevronLeft, Check, Save, History as HistoryIcon, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, FileText, PieChart, Trash2, Edit, CheckCircle } from 'lucide-react';
+import { Plus, Users, Calendar, UploadCloud, GraduationCap, ChevronLeft, Check, Save, History as HistoryIcon, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, FileText, PieChart, Trash2, Edit, CheckCircle, Loader2 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -228,6 +228,7 @@ export default function AdminDashboard() {
       }
 
       fetchWorkshopStudents(selectedWorkshop.id);
+      setStudents(prev => prev.map(s => ({ ...s, status: null })));
       setObservation('');
       setWsActiveTab('historial');
     } catch (error: any) {
@@ -758,46 +759,6 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
-
-      {creatingWorkshop && (
-        <div className="card" style={{ marginBottom: '2rem', backgroundColor: 'rgba(14, 165, 233, 0.05)', border: '1px solid var(--color-primary)' }}>
-          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.5rem' }}>Crear Taller en {nivel}</h2>
-          <form 
-            style={{ display: 'grid', gap: '1.5rem' }}
-            onSubmit={(e) => { e.preventDefault(); setCreatingWorkshop(false); }}
-          >
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <div style={{ flex: '2 1 300px' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Nombre del Taller</label>
-                <input type="text" placeholder="Ej: Voleibol Avanzado" required style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '4px' }} />
-              </div>
-              <div style={{ flex: '1 1 200px' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Docente Asignado</label>
-                <select required style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}>
-                  <option value="">Seleccione un docente...</option>
-                  {teachers.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Lista de Estudiantes (Curso)</label>
-              <div style={{ border: '2px dashed var(--color-primary)', borderRadius: 'var(--border-radius)', padding: '2rem', textAlign: 'center', backgroundColor: 'var(--color-surface)', cursor: 'pointer' }}>
-                <UploadCloud size={32} style={{ color: 'var(--color-primary)', margin: '0 auto 0.5rem' }} />
-                <p style={{ margin: 0, fontWeight: 500 }}>Arrastra tu archivo Excel/CSV aquí</p>
-                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-light)' }}>para cargar la nómina de estudiantes</p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-              <button type="button" className="toggle-btn" style={{ border: '1px solid var(--color-border)', borderRadius: '4px', padding: '0.5rem 1rem' }} onClick={() => setCreatingWorkshop(false)}>Cancelar</button>
-              <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1.5rem' }}>Guardar Taller</button>
-            </div>
-          </form>
-        </div>
-      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.25rem' }}>Talleres Activos en {nivel}</h2>

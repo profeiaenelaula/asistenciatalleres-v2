@@ -389,7 +389,6 @@ export default function TeacherDashboard() {
                                 {isExpanded ? <><ChevronUp size={16} /> Cerrar</> : <><ChevronDown size={16} /> Detalle</>}
                               </button>
                               <button onClick={() => handleEdit(record)} style={{ background: 'transparent', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}><Edit size={16} /></button>
-                              <button onClick={() => handleDelete(record.id)} style={{ background: 'transparent', border: '1px solid var(--color-danger)', color: 'var(--color-danger)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}><Trash2 size={16} /></button>
                             </div>
                           </td>
                         </tr>
