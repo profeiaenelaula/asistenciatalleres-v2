@@ -114,6 +114,7 @@ export default function AdminDashboard() {
   
   // Docentes Creation
   const [newTeacherName, setNewTeacherName] = useState('');
+  const [newTeacherUsername, setNewTeacherUsername] = useState('');
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
   const [isCreatingTeacher, setIsCreatingTeacher] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
