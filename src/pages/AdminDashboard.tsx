@@ -114,10 +114,59 @@ export default function AdminDashboard() {
   
   // Docentes Creation
   const [newTeacherName, setNewTeacherName] = useState('');
-  const [newTeacherUsername, setNewTeacherUsername] = useState('');
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
   const [isCreatingTeacher, setIsCreatingTeacher] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showMassUpdateModal, setShowMassUpdateModal] = useState(false);
+  const [genericPassword, setGenericPassword] = useState('');
+  const [isMassUpdating, setIsMassUpdating] = useState(false);
+  
+  const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
+  const [editTeacherName, setEditTeacherName] = useState('');
+  const [editTeacherUsername, setEditTeacherUsername] = useState('');
+  const [editTeacherPassword, setEditTeacherPassword] = useState('');
+  const [isUpdatingTeacher, setIsUpdatingTeacher] = useState(false);
+
+  const handleUpdateTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeacher) return;
+    setIsUpdatingTeacher(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update_teacher', {
+        body: { id: editingTeacher.id, username: editTeacherUsername, password: editTeacherPassword, name: editTeacherName }
+      });
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      alert('Docente actualizado exitosamente.');
+      setEditingTeacher(null);
+      fetchTeachers();
+    } catch (e: any) {
+      alert('Error al actualizar: ' + e.message);
+    } finally {
+      setIsUpdatingTeacher(false);
+    }
+  };
+
+  const handleMassUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!genericPassword) return;
+    if (!window.confirm(`¿Estás seguro de cambiar la clave de TODOS los docentes a "${genericPassword}"? Esta acción no se puede deshacer.`)) return;
+    
+    setIsMassUpdating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('mass_update_teacher_passwords', {
+        body: { generic_password: genericPassword }
+      });
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      alert(`Claves actualizadas exitosamente para ${data.count} docentes.`);
+      setShowMassUpdateModal(false);
+      setGenericPassword('');
+      fetchTeachers();
+    } catch (e: any) {
+      alert('Error al actualizar claves: ' + e.message);
+    } finally {
+      setIsMassUpdating(false);
+    }
+  };
 
   const handleDeleteTeacher = async (id: string) => {
     if (!window.confirm('¿Estás seguro de eliminar este docente? Se borrará su cuenta permanentemente.')) return;
@@ -650,15 +699,24 @@ export default function AdminDashboard() {
 
   const renderDocentesTab = () => (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h2 style={{ fontSize: '1.25rem' }}>Directorio de Docentes</h2>
-        <button 
-          className="btn-accent" 
-          onClick={() => setShowPasswordModal(true)}
-          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.5rem 1rem' }}
-        >
-          <Users size={18} /> Ver Usuarios y Claves
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <button 
+            className="btn-danger" 
+            onClick={() => setShowMassUpdateModal(true)}
+            style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.5rem 1rem', backgroundColor: 'var(--color-danger)', color: 'white', border: 'none', borderRadius: 'var(--border-radius)', cursor: 'pointer' }}
+          >
+            <Edit size={18} /> Cambio Masivo de Claves
+          </button>
+          <button 
+            className="btn-accent" 
+            onClick={() => setShowPasswordModal(true)}
+            style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.5rem 1rem', border: '1px solid var(--color-border)', borderRadius: 'var(--border-radius)', cursor: 'pointer', background: 'transparent' }}
+          >
+            <Users size={18} /> Ver Usuarios y Claves
+          </button>
+        </div>
       </div>
       
       <div className="card" style={{ marginBottom: '2rem', backgroundColor: 'var(--color-bg)', border: 'none' }}>
@@ -716,12 +774,25 @@ export default function AdminDashboard() {
                 <td style={{ padding: '1rem', fontWeight: 500 }}>{t.name}</td>
                 <td style={{ padding: '1rem', color: 'var(--color-text-light)' }}>{t.username}</td>
                 <td style={{ padding: '1rem' }}>
-                  <button 
-                    onClick={() => handleDeleteTeacher(t.id)}
-                    style={{ color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}
-                  >
-                    Eliminar
-                  </button>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button 
+                      onClick={() => {
+                        setEditingTeacher(t);
+                        setEditTeacherName(t.name);
+                        setEditTeacherUsername(t.username);
+                        setEditTeacherPassword('');
+                      }}
+                      style={{ color: 'var(--color-primary)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}
+                    >
+                      Editar
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteTeacher(t.id)}
+                      style={{ color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -776,6 +847,71 @@ export default function AdminDashboard() {
                 <Copy size={18} /> Copiar Lista
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {editingTeacher && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.25rem', margin: 0 }}>Editar Docente</h3>
+              <button onClick={() => setEditingTeacher(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateTeacher} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nombre Completo</label>
+                <input type="text" value={editTeacherName} onChange={e => setEditTeacherName(e.target.value)} required />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nombre de Usuario</label>
+                <input type="text" value={editTeacherUsername} onChange={e => setEditTeacherUsername(e.target.value)} required />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nueva Clave de Acceso (Opcional)</label>
+                <input type="text" value={editTeacherPassword} onChange={e => setEditTeacherPassword(e.target.value)} placeholder="Dejar en blanco para mantener la actual" />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+                <button type="button" className="btn-accent" onClick={() => setEditingTeacher(null)} style={{ padding: '0.75rem 1.5rem', border: '1px solid var(--color-border)', borderRadius: 'var(--border-radius)', background: 'transparent', cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-primary" style={{ padding: '0.75rem 1.5rem' }} disabled={isUpdatingTeacher}>
+                  {isUpdatingTeacher ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showMassUpdateModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.25rem', margin: 0, color: 'var(--color-danger)' }}>Cambio Masivo de Claves</h3>
+              <button onClick={() => setShowMassUpdateModal(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <p style={{ fontSize: '0.875rem', marginBottom: '1.5rem', color: 'var(--color-text-light)' }}>
+              Al utilizar esta función, <strong>TODOS</strong> los docentes registrados tendrán exactamente la misma clave de acceso. Las claves anteriores dejarán de funcionar inmediatamente.
+            </p>
+            <form onSubmit={handleMassUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600 }}>Nueva Clave Genérica para Todos</label>
+                <input type="text" value={genericPassword} onChange={e => setGenericPassword(e.target.value)} required placeholder="Ej: JEC2026_GEN" />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+                <button type="button" className="btn-accent" onClick={() => setShowMassUpdateModal(false)} style={{ padding: '0.75rem 1.5rem', border: '1px solid var(--color-border)', borderRadius: 'var(--border-radius)', background: 'transparent', cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-danger" style={{ padding: '0.75rem 1.5rem', backgroundColor: 'var(--color-danger)', color: 'white', border: 'none', borderRadius: 'var(--border-radius)', cursor: 'pointer' }} disabled={isMassUpdating}>
+                  {isMassUpdating ? 'Procesando...' : 'Aplicar a Todos'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
