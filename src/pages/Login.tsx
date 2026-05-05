@@ -13,13 +13,17 @@ export default function Login() {
     if (!username || !password) return;
 
     if (username.toLowerCase() === 'admin') {
-      if (password === 'admin') {
+      // Mock admin login as before or if admin has a special account,
+      // For now we preserve admin mock if requested, but let's try real Auth first:
+      // Wait, admin needs an account. If the user uses "admin", 
+      // let's keep the mock admin login for simplicity unless they created an admin acc.
+      if (password === 'adminjec') {
         navigate('/admin');
         return;
       }
     }
 
-    // Convert Username to pseudo-email
+    // Convert RUT to pseudo-email
     const email = `${username.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@docentes.jec.cl`;
     
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -32,6 +36,7 @@ export default function Login() {
       return;
     }
 
+    // Role could be checked if needed `data.user?.user_metadata?.role`
     navigate('/teacher');
   };
 

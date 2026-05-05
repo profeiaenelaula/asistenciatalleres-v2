@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Calendar, UploadCloud, GraduationCap, ChevronLeft, Check, Save, History as HistoryIcon, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, FileText, PieChart, Trash2, Edit, CheckCircle, Loader2 } from 'lucide-react';
+import { Plus, Users, Calendar, UploadCloud, GraduationCap, ChevronLeft, Check, Save, History as HistoryIcon, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, FileText, PieChart, Trash2, Edit, CheckCircle, Copy, X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 
 const NIVELES = ['1° Medio', '2° Medio', '3° Medio', '4° Medio'];
 
-interface Teacher { id: string; name: string; username: string; }
+interface Teacher { id: string; name: string; username: string; password?: string; }
 interface Student {
   id: string;
   name: string;
@@ -117,6 +117,21 @@ export default function AdminDashboard() {
   const [newTeacherUsername, setNewTeacherUsername] = useState('');
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
   const [isCreatingTeacher, setIsCreatingTeacher] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+
+  const handleDeleteTeacher = async (id: string) => {
+    if (!window.confirm('¿Estás seguro de eliminar este docente? Se borrará su cuenta permanentemente.')) return;
+    try {
+      const { data, error } = await supabase.functions.invoke('delete_teacher', {
+        body: { id }
+      });
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      alert('Docente eliminado exitosamente.');
+      fetchTeachers();
+    } catch (e: any) {
+      alert('Error al eliminar: ' + e.message);
+    }
+  };
 
   // Workshop Detail View (Admin Taking Over)
   const [selectedWorkshop, setSelectedWorkshop] = useState<any>(null);
@@ -228,7 +243,6 @@ export default function AdminDashboard() {
       }
 
       fetchWorkshopStudents(selectedWorkshop.id);
-      setStudents(prev => prev.map(s => ({ ...s, status: null })));
       setObservation('');
       setWsActiveTab('historial');
     } catch (error: any) {
@@ -286,7 +300,7 @@ export default function AdminDashboard() {
       head: [['Estudiante', 'RUT', 'Días Presente', 'Días Ausente', '% Asistencia']],
       body: studentData,
       theme: 'grid',
-      headStyles: { fillColor: [14, 165, 233] } as any, // primary
+      headStyles: { fillColor: [14, 165, 233] }, // primary
     });
 
     doc.save(`Reporte_Global_${selectedWorkshop.name.replace(/ /g, '_')}.pdf`);
@@ -317,7 +331,7 @@ export default function AdminDashboard() {
       head: [['Fecha', 'Estado', 'Nota de la Sesión']],
       body: historyData,
       theme: 'grid',
-      headStyles: { fillColor: [234, 179, 8] } as any, // accent
+      headStyles: { fillColor: [234, 179, 8] }, // accent
     });
 
     doc.save(`Reporte_Individual_${student.name.replace(/ /g, '_')}.pdf`);
@@ -328,7 +342,7 @@ export default function AdminDashboard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
         <button 
           className="btn-accent" 
-          style={{ padding: '0.5rem', borderRadius: '50%', background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+          style={{ padding: '0.5rem', borderRadius: '50%' }}
           onClick={() => setSelectedWorkshop(null)}
         >
           <ChevronLeft size={24} />
@@ -419,10 +433,10 @@ export default function AdminDashboard() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                    <th style={{ padding: '1rem', textAlign: 'left' }}>Fecha de Sesión</th>
-                    <th style={{ padding: '1rem', textAlign: 'center' }}>Asistencia</th>
-                    <th style={{ padding: '1rem', textAlign: 'left' }}>Observación</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Acciones</th>
+                    <th>Fecha de Sesión</th>
+                    <th style={{ textAlign: 'center' }}>Asistencia</th>
+                    <th>Observación</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -447,8 +461,8 @@ export default function AdminDashboard() {
                             <span style={{ fontSize: '0.875rem', color: 'var(--color-text-light)', marginLeft: '0.5rem' }}>({percent}%)</span>
                           </td>
                           <td style={{ color: 'var(--color-text-light)', padding: '1rem' }}>{record.observation || '-'}</td>
-                          <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                          <td style={{ padding: '1rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
                               <button 
                                 onClick={() => setExpandedDate(isExpanded ? null : record.date)}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: isExpanded ? 'var(--color-primary)' : 'transparent', color: isExpanded ? 'white' : 'var(--color-text)', border: '1px solid', borderColor: isExpanded ? 'var(--color-primary)' : 'var(--color-border)', padding: '0.25rem 0.75rem', fontSize: '0.875rem', borderRadius: '4px', cursor: 'pointer' }}
@@ -456,7 +470,7 @@ export default function AdminDashboard() {
                                 {isExpanded ? <><ChevronUp size={16} /> Ocultar Lista</> : <><ChevronDown size={16} /> Ver Estudiantes</>}
                               </button>
                               <button onClick={() => handleEdit(record)} className="btn-accent" style={{ padding: '0.25rem 0.5rem', borderRadius: '4px' }}><Edit size={16} /></button>
-                              <button onClick={() => deleteSession(record.id)} className="btn-accent" style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', borderColor: 'var(--color-danger)', color: 'var(--color-danger)', background: 'transparent' }}><Trash2 size={16} /></button>
+                              <button onClick={() => deleteSession(record.id)} className="btn-accent" style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}><Trash2 size={16} /></button>
                             </div>
                           </td>
                         </tr>
@@ -467,7 +481,7 @@ export default function AdminDashboard() {
                                 {record.studentRecords.map(sr => (
                                   <div key={sr.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', borderBottom: '1px dashed var(--color-border)' }}>
                                     <span style={{ color: 'var(--color-text)' }}>{sr.name}</span>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: sr.status === 'present' ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                                    <span className={`badge ${sr.status === 'present' ? 'badge-present' : 'badge-absent'}`} style={{ fontSize: '0.75rem' }}>
                                       {sr.status === 'present' ? 'Presente' : 'Ausente'}
                                     </span>
                                   </div>
@@ -514,6 +528,7 @@ export default function AdminDashboard() {
                 <tbody>
                   {students.map(student => {
                     const stats = calculateStudentStats(student.id);
+                    // Color code the percentage (Green > 75%, Yellow > 50%, Red < 50%)
                     const pctColor = stats.percentage >= 75 ? 'var(--color-success)' : stats.percentage >= 50 ? 'var(--color-accent)' : 'var(--color-danger)';
                     return (
                       <tr key={student.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -524,7 +539,7 @@ export default function AdminDashboard() {
                         <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 600 }}>{stats.presences}</td>
                         <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 600, color: 'var(--color-text-light)' }}>{stats.absences}</td>
                         <td style={{ padding: '1rem', textAlign: 'center' }}>
-                          <div style={{ display: 'inline-block', padding: '0.25rem 0.5rem', borderRadius: '4px', backgroundColor: stats.percentage >= 75 ? 'rgba(16, 185, 129, 0.1)' : stats.percentage >= 50 ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: pctColor, fontWeight: 700 }}>
+                          <div style={{ display: 'inline-block', padding: '0.25rem 0.5rem', borderRadius: '4px', backgroundColor: `rgba(${pctColor === 'var(--color-success)' ? '16, 185, 129' : pctColor === 'var(--color-accent)' ? '234, 179, 8' : '239, 68, 68'}, 0.1)`, color: pctColor, fontWeight: 700 }}>
                             {stats.percentage}%
                           </div>
                         </td>
@@ -564,7 +579,7 @@ export default function AdminDashboard() {
                 <div style={{ position: 'relative' }}>
                   <input 
                     id="dateSelectAdmin" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
-                    style={{ padding: '0.4rem 0.4rem 0.4rem 2.5rem', fontWeight: 600, border: '1px solid var(--color-danger)', borderRadius: '4px' }}
+                    style={{ paddingLeft: '2.5rem', fontWeight: 600, border: '1px solid var(--color-danger)' }}
                   />
                   <CalendarIcon size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-danger)' }} />
                 </div>
@@ -615,7 +630,7 @@ export default function AdminDashboard() {
               rows={3}
               value={observation}
               onChange={(e) => setObservation(e.target.value)}
-              style={{ marginBottom: '1.5rem', border: '1px solid var(--color-danger)', width: '100%', padding: '0.75rem', borderRadius: '4px' }}
+              style={{ marginBottom: '1.5rem', border: '1px solid var(--color-danger)' }}
             />
             
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -624,7 +639,7 @@ export default function AdminDashboard() {
                 style={{ padding: '1rem 2rem', fontSize: '1.125rem', backgroundColor: 'var(--color-danger)', color: 'white', border: 'none', borderRadius: 'var(--border-radius)', display: 'flex', gap: '0.5rem', alignItems: 'center', cursor: 'pointer' }}
                 disabled={saved}
               >
-                {saved ? <><Loader2 className="animate-spin" size={24} /> Guardando...</> : <><Save size={24} /> Forzar Registro de Asistencia</>}
+                {saved ? <><Check size={24} /> Guardando...</> : <><Save size={24} /> Forzar Registro de Asistencia</>}
               </button>
             </div>
           </div>
@@ -637,6 +652,13 @@ export default function AdminDashboard() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.25rem' }}>Directorio de Docentes</h2>
+        <button 
+          className="btn-accent" 
+          onClick={() => setShowPasswordModal(true)}
+          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.5rem 1rem' }}
+        >
+          <Users size={18} /> Ver Usuarios y Claves
+        </button>
       </div>
       
       <div className="card" style={{ marginBottom: '2rem', backgroundColor: 'var(--color-bg)', border: 'none' }}>
@@ -663,15 +685,15 @@ export default function AdminDashboard() {
         >
           <div style={{ flex: '1 1 200px' }}>
             <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Nombre Completo</label>
-            <input type="text" value={newTeacherName} onChange={e => setNewTeacherName(e.target.value)} required style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }} />
+            <input type="text" value={newTeacherName} onChange={e => setNewTeacherName(e.target.value)} required />
           </div>
           <div style={{ flex: '1 1 150px' }}>
             <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Nombre de Usuario</label>
-            <input type="text" value={newTeacherUsername} onChange={e => setNewTeacherUsername(e.target.value)} required placeholder="Ej: r.gonzalez" style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }} />
+            <input type="text" value={newTeacherUsername} onChange={e => setNewTeacherUsername(e.target.value)} required placeholder="Ej: r.gonzalez" />
           </div>
           <div style={{ flex: '1 1 150px' }}>
             <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Clave de Acceso</label>
-            <input type="text" value={newTeacherPassword} onChange={e => setNewTeacherPassword(e.target.value)} required placeholder="Ej: JEC2026!" style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }} />
+            <input type="text" value={newTeacherPassword} onChange={e => setNewTeacherPassword(e.target.value)} required placeholder="Ej: JEC2026!" />
           </div>
           <button type="submit" className="btn-primary" style={{ padding: '0.75rem 1.5rem' }} disabled={isCreatingTeacher}>
             {isCreatingTeacher ? 'Creando...' : 'Añadir Docente'}
@@ -685,7 +707,7 @@ export default function AdminDashboard() {
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ padding: '1rem', textAlign: 'left' }}>Nombre Completo</th>
               <th style={{ padding: '1rem', textAlign: 'left' }}>Usuario</th>
-              <th style={{ padding: '1rem', textAlign: 'right' }}>Acciones</th>
+              <th style={{ padding: '1rem', textAlign: 'left' }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -693,12 +715,70 @@ export default function AdminDashboard() {
               <tr key={t.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: '1rem', fontWeight: 500 }}>{t.name}</td>
                 <td style={{ padding: '1rem', color: 'var(--color-text-light)' }}>{t.username}</td>
-                <td style={{ padding: '1rem', textAlign: 'right' }}><button style={{ color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Eliminar</button></td>
+                <td style={{ padding: '1rem' }}>
+                  <button 
+                    onClick={() => handleDeleteTeacher(t.id)}
+                    style={{ color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}
+                  >
+                    Eliminar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {showPasswordModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.25rem', margin: 0 }}>Usuarios y Claves de Acceso</h3>
+              <button onClick={() => setShowPasswordModal(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-light)' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div style={{ marginBottom: '1.5rem', backgroundColor: 'rgba(14, 165, 233, 0.1)', padding: '1rem', borderRadius: 'var(--border-radius)', color: 'var(--color-primary)', fontSize: '0.875rem' }}>
+              <strong>Nota:</strong> Solo se muestran las claves de los docentes creados recientemente. Las claves de usuarios antiguos están encriptadas de forma segura y no pueden ser visualizadas.
+            </div>
+            <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Nombre</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Usuario</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Clave</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teachers.map(t => (
+                    <tr key={t.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <td style={{ padding: '0.75rem', fontWeight: 500 }}>{t.name}</td>
+                      <td style={{ padding: '0.75rem' }}>{t.username}</td>
+                      <td style={{ padding: '0.75rem', fontFamily: 'monospace', color: t.password ? 'var(--color-text)' : 'var(--color-text-light)' }}>
+                        {t.password || 'Oculta (Antigua)'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  const text = teachers.map(t => `${t.name} | Usuario: ${t.username} | Clave: ${t.password || 'Oculta (Antigua)'}`).join('\n');
+                  navigator.clipboard.writeText(text);
+                  alert('Lista copiada al portapapeles');
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Copy size={18} /> Copiar Lista
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -708,7 +788,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h2 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Calendar size={20} style={{ color: 'var(--color-accent)' }} />
+              <Calendar size={20} className="text-accent" />
               Horario Base del Nivel
             </h2>
             <p style={{ color: 'var(--color-text-light)', marginTop: '0.25rem' }}>Cursos: {nivel}.</p>
@@ -716,7 +796,6 @@ export default function AdminDashboard() {
           <button 
             className="btn-accent" 
             onClick={() => setEditingCalendar(!editingCalendar)}
-            style={{ padding: '0.5rem 1.5rem', background: editingCalendar ? 'var(--color-bg)' : 'var(--color-accent)', border: '1px solid var(--color-accent)', color: editingCalendar ? 'var(--color-accent)' : '#fff' }}
           >
             {editingCalendar ? 'Cerrar Calendario' : 'Editar Calendario 2026'}
           </button>
@@ -745,11 +824,11 @@ export default function AdminDashboard() {
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Hora de Inicio</label>
-                  <input type="time" defaultValue="14:00" style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }} />
+                  <input type="time" defaultValue="14:00" />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Hora de Término</label>
-                  <input type="time" defaultValue="15:30" style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }} />
+                  <input type="time" defaultValue="15:30" />
                 </div>
               </div>
               <button className="btn-primary" style={{ marginTop: '1.5rem', width: '100%' }} onClick={() => setEditingCalendar(false)}>
@@ -760,10 +839,50 @@ export default function AdminDashboard() {
         )}
       </div>
 
+      {creatingWorkshop && (
+        <div className="card" style={{ marginBottom: '2rem', backgroundColor: 'rgba(14, 165, 233, 0.05)', border: '1px solid var(--color-primary)' }}>
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.5rem' }}>Crear Taller en {nivel}</h2>
+          <form 
+            style={{ display: 'grid', gap: '1.5rem' }}
+            onSubmit={(e) => { e.preventDefault(); setCreatingWorkshop(false); }}
+          >
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: '2 1 300px' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Nombre del Taller</label>
+                <input type="text" placeholder="Ej: Voleibol Avanzado" required />
+              </div>
+              <div style={{ flex: '1 1 200px' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Docente Asignado</label>
+                <select required>
+                  <option value="">Seleccione un docente...</option>
+                  {teachers.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Lista de Estudiantes (Curso)</label>
+              <div style={{ border: '2px dashed var(--color-primary)', borderRadius: 'var(--border-radius)', padding: '2rem', textAlign: 'center', backgroundColor: 'var(--color-surface)', cursor: 'pointer' }}>
+                <UploadCloud size={32} style={{ color: 'var(--color-primary)', margin: '0 auto 0.5rem' }} />
+                <p style={{ margin: 0, fontWeight: 500 }}>Arrastra tu archivo Excel/CSV aquí</p>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-light)' }}>para cargar la nómina de estudiantes</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <button type="button" className="toggle-btn" style={{ border: '1px solid var(--color-border)' }} onClick={() => setCreatingWorkshop(false)}>Cancelar</button>
+              <button type="submit" className="btn-primary">Guardar Taller</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.25rem' }}>Talleres Activos en {nivel}</h2>
         {!creatingWorkshop && (
-          <button className="btn-primary" onClick={() => setCreatingWorkshop(true)} style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button className="btn-primary" onClick={() => setCreatingWorkshop(true)}>
             <Plus size={18} /> Nuevo Taller
           </button>
         )}
@@ -805,7 +924,7 @@ export default function AdminDashboard() {
                 <td style={{ padding: '1rem', textAlign: 'right' }}>
                   <button 
                     className="btn-accent" 
-                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem', marginRight: '0.5rem' }}
                     onClick={() => {
                       setSelectedWorkshop({ id: w.id, name: w.title, teacher: w.teachers?.name || 'Sin Asignar' });
                       fetchWorkshopStudents(w.id);
@@ -831,7 +950,7 @@ export default function AdminDashboard() {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
             <h1 style={{ fontSize: '1.875rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <GraduationCap size={28} style={{ color: 'var(--color-primary)' }} />
+              <GraduationCap size={28} color="var(--color-primary)" />
               Panel de Administración
             </h1>
           </div>
