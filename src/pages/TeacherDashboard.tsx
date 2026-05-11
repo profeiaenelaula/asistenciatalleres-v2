@@ -53,13 +53,7 @@ export default function TeacherDashboard() {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // FIX: allow mock session for testing or if logged in via local mock
       if (!user) {
-        // If no user is found, we might be in a mock environment or session expired
-        console.warn('No active Supabase session found.');
-        // For production, we should redirect to login. 
-        // But let's check if we have a mock flag or just redirect safely:
         window.location.href = '/login';
         return;
       }
@@ -163,13 +157,11 @@ export default function TeacherDashboard() {
       alert('Por favor, marca la asistencia de todos los estudiantes.');
       return;
     }
-
-    const confirmSave = window.confirm(`¿Está seguro que desea guardar la asistencia del día ${selectedDate}?`);
-    if (!confirmSave) return;
     
     setSaved(true);
     try {
       if (editingSessionId) {
+        // UPDATE MODE
         const { error: sessionError } = await supabase
           .from('attendance_sessions')
           .update({ date: selectedDate, observation })
@@ -190,6 +182,7 @@ export default function TeacherDashboard() {
         alert('Registro actualizado con éxito.');
         setEditingSessionId(null);
       } else {
+        // CREATE MODE
         const { data: session, error: sessionError } = await supabase
           .from('attendance_sessions')
           .insert({ workshop_id: selectedWorkshop.id, date: selectedDate, observation })
@@ -210,7 +203,6 @@ export default function TeacherDashboard() {
       await fetchHistory(selectedWorkshop.id);
       setStudents(prev => prev.map(s => ({ ...s, status: null })));
       setObservation('');
-      setActiveTab('historial');
       setSaved(false);
     } catch (error: any) {
       alert('Error: ' + error.message);
@@ -247,7 +239,7 @@ export default function TeacherDashboard() {
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '60vh', gap: '1rem' }}>
-        <Loader2 className="animate-spin" style={{ color: 'var(--color-primary)' }} size={48} />
+        <Loader2 className="animate-spin text-primary" size={48} />
         <p style={{ color: 'var(--color-text-light)' }}>Cargando información del taller...</p>
       </div>
     );
@@ -336,11 +328,11 @@ export default function TeacherDashboard() {
 
           <div className="card" style={{ marginBottom: '2rem' }}>
             <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Observaciones</h2>
-            <textarea placeholder="Observaciones generales de la sesión..." rows={3} value={observation} onChange={(e) => setObservation(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--color-border)' }} />
+            <textarea placeholder="Observaciones generales de la sesión..." rows={3} value={observation} onChange={(e) => setObservation(e.target.value)} />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-            {editingSessionId && <button className="btn-accent" onClick={() => { setEditingSessionId(null); setStudents(s => s.map(st => ({ ...st, status: null }))); setObservation(''); }} style={{ background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '4px' }}>Cancelar Edición</button>}
+            {editingSessionId && <button className="btn-accent" onClick={() => { setEditingSessionId(null); setStudents(s => s.map(st => ({ ...st, status: null }))); setObservation(''); }}>Cancelar Edición</button>}
             <button className="btn-primary" onClick={handleSave} style={{ padding: '1rem 2rem' }} disabled={saved}>
               {saved ? <><Loader2 className="animate-spin" size={24} /> Guardando...</> : <><Save size={24} /> {editingSessionId ? 'Actualizar Registro' : 'Finalizar y Guardar'}</>}
             </button>
@@ -389,6 +381,7 @@ export default function TeacherDashboard() {
                                 {isExpanded ? <><ChevronUp size={16} /> Cerrar</> : <><ChevronDown size={16} /> Detalle</>}
                               </button>
                               <button onClick={() => handleEdit(record)} style={{ background: 'transparent', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}><Edit size={16} /></button>
+                              <button onClick={() => handleDelete(record.id)} style={{ background: 'transparent', border: '1px solid var(--color-danger)', color: 'var(--color-danger)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}><Trash2 size={16} /></button>
                             </div>
                           </td>
                         </tr>

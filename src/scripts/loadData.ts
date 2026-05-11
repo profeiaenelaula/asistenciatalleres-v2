@@ -16,12 +16,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   const csvPath = path.resolve(__dirname, '../../inscripciones-talleres-2026-04-20.csv');
-  if (!fs.existsSync(csvPath)) {
-    console.log('Archivo CSV no encontrado para carga masiva.');
-    return;
-  }
   const fileContent = fs.readFileSync(csvPath, 'utf8');
 
+  // Strip BOM if present
   let cleanContent = fileContent;
   if (cleanContent.charCodeAt(0) === 0xFEFF) {
     cleanContent = cleanContent.slice(1);
@@ -37,18 +34,24 @@ async function main() {
   console.log(`Leídas ${rows.length} filas del Excel.`);
 
   const workshopsSet = new Set<string>();
-  const workshopsMap = new Map<string, string>();
+  const workshopsMap = new Map<string, string>(); // 'Taller|Nivel' -> uuid
 
   for (const row of rows) {
     const keys = Object.keys(row);
     const titleKey = keys.find(k => k.includes('Taller')) || keys[0];
-    const title = row[titleKey];
-    const level = row['Nivel'];
+    let title = row[titleKey]?.trim();
+    const level = row['Nivel']?.trim();
     if (title && level) {
-      workshopsSet.add(`${title.trim()}|${level.trim()}`);
+      if (['2° Medio', '3° Medio', '4° Medio'].includes(level) && !title.includes(level)) {
+        title = `${title} ${level}`;
+      }
+      workshopsSet.add(`${title}|${level}`);
     }
   }
 
+  console.log(`Encontrados ${workshopsSet.size} talleres únicos.`);
+
+  // 1. Create or get Workshops
   for (const w of workshopsSet) {
     const [title, level] = w.split('|');
     let { data: existingWorkshop } = await supabase
@@ -71,12 +74,17 @@ async function main() {
         .select()
         .single();
       
-      if (error) continue;
+      if (error) {
+        console.error('Error insertando taller:', error);
+        continue;
+      }
       existingWorkshop = newWorkshop;
     }
     workshopsMap.set(w, existingWorkshop!.id);
   }
 
+  // 2. Insert Students & Enrollments
+  console.log('Procesando estudiantes...');
   for (const row of rows) {
     const keys = Object.keys(row);
     const titleKey = keys.find(k => k.includes('Taller')) || keys[0];
@@ -84,11 +92,16 @@ async function main() {
     const fullName = row['Estudiante']?.trim();
     const rut = row['RUT']?.trim();
     const course = row['Curso']?.trim();
-    const workshopTitle = row[titleKey]?.trim();
+    let workshopTitle = row[titleKey]?.trim();
     const level = row['Nivel']?.trim();
+
+    if (workshopTitle && level && ['2° Medio', '3° Medio', '4° Medio'].includes(level) && !workshopTitle.includes(level)) {
+      workshopTitle = `${workshopTitle} ${level}`;
+    }
 
     if (!rut || !workshopTitle) continue;
 
+    // Check student
     const { data: existingStudent } = await supabase
       .from('students')
       .select('id')
@@ -101,10 +114,14 @@ async function main() {
         name: fullName,
         course
       });
+    } else {
+      // Opt: update if name changed?
     }
 
     const workshopId = workshopsMap.get(`${workshopTitle}|${level}`);
+    
     if (workshopId) {
+      // Check existing enrollment
       const { data: existingEnrollment } = await supabase
         .from('enrollments')
         .select('id')
@@ -113,16 +130,24 @@ async function main() {
         .maybeSingle();
 
       if (!existingEnrollment) {
-        await supabase.from('enrollments').insert({
+        // Enforce 1 enrollment per student if needed, wait, if the CSV has duplicate RUTs in different workshops we should add them if they correspond to different things, but the table rule said student_rut is UNIQUE.
+        // Actually, let's just insert/on conflict do nothing or catch error
+        const { error } = await supabase.from('enrollments').insert({
           workshop_id: workshopId,
           student_name: fullName,
           student_rut: rut,
           course,
           subject: workshopTitle
         });
+        if (error) {
+           // We might hit a unique constraint on student_rut if they are already in another workshop
+           console.log(`Aviso: No se pudo inscribir a ${fullName} (${rut}):`, error.message);
+        }
       }
     }
   }
+
+  console.log('Carga masiva completada exitosamente.');
 }
 
 main().catch(console.error);
