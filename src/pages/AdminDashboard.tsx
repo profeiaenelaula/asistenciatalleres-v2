@@ -6,6 +6,7 @@ import { es } from 'date-fns/locale';
 import 'react-day-picker/dist/style.css';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
 
 const NIVELES = ['1° Medio', '2° Medio', '3° Medio', '4° Medio'];
@@ -52,6 +53,10 @@ export default function AdminDashboard() {
   };
 
   const fetchWorkshopStudents = async (workshopId: string) => {
+    // Clear stale state immediately to prevent cross-workshop ID mismatches
+    setStudents([]);
+    setPastRecords([]);
+
     try {
       // 1. Fetch Students
       const { data: enrollments } = await supabase
@@ -102,6 +107,118 @@ export default function AdminDashboard() {
       }
     } catch (error) {
       console.error('Error fetching workshop students/history:', error);
+      setPastRecords([]);
+    }
+  };
+
+  const downloadGlobalCSV = async () => {
+    try {
+      const { data: sessions, error } = await supabase
+        .from('attendance_sessions')
+        .select(`
+          date,
+          observation,
+          workshops!inner (title, target_level, teachers(name)),
+          attendance_records (student_name, student_rut, status)
+        `)
+        .order('date', { ascending: false });
+
+      if (error || !sessions) {
+        alert('Error obteniendo datos para CSV');
+        return;
+      }
+
+      const rows: any[] = [];
+      sessions.forEach((s: any) => {
+        const w = s.workshops;
+        const tName = w?.teachers?.name || 'Sin Asignar';
+        const records = s.attendance_records || [];
+        records.forEach((r: any) => {
+          rows.push({
+            Fecha: format(new Date(s.date), 'dd/MM/yyyy'),
+            Nivel: w.target_level,
+            Taller: w.title,
+            Docente: tName,
+            'RUT Estudiante': r.student_rut,
+            'Nombre Estudiante': r.student_name,
+            Asistencia: r.status === 'present' ? 'Presente' : 'Ausente',
+            Observación: s.observation || ''
+          });
+        });
+      });
+
+      const csv = Papa.unparse(rows);
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Asistencia_Global_${format(new Date(), 'dd-MM-yyyy')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      alert('Error generando CSV');
+    }
+  };
+
+  const printLevelAttendance = async (nivel: string) => {
+    try {
+      const { data: sessions, error } = await supabase
+        .from('attendance_sessions')
+        .select(`
+          date,
+          observation,
+          workshops!inner (title, target_level, teachers(name)),
+          attendance_records (student_name, student_rut, status)
+        `)
+        .eq('workshops.target_level', nivel)
+        .order('date', { ascending: false });
+
+      if (error || !sessions) {
+        alert('Error obteniendo datos para PDF');
+        return;
+      }
+
+      const rows: any[] = [];
+      sessions.forEach((s: any) => {
+        const w = s.workshops;
+        const records = s.attendance_records || [];
+        records.forEach((r: any) => {
+          rows.push([
+            format(new Date(s.date), 'dd/MM/yyyy'),
+            w.title,
+            r.student_name,
+            r.student_rut,
+            r.status === 'present' ? 'Presente' : 'Ausente'
+          ]);
+        });
+      });
+
+      if (rows.length === 0) {
+        alert('No hay registros de asistencia para este nivel.');
+        return;
+      }
+
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text(`Reporte Consolidado de Asistencia - ${nivel}`, 14, 20);
+      
+      doc.setFontSize(10);
+      doc.text(`Generado el: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 28);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['Fecha', 'Taller', 'Estudiante', 'RUT', 'Estado']],
+        body: rows,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [79, 70, 229] }
+      });
+
+      doc.save(`Asistencia_${nivel}_${format(new Date(), 'dd-MM-yyyy')}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('Error generando PDF');
     }
   };
   
@@ -1016,13 +1133,18 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.25rem' }}>Talleres Activos en {nivel}</h2>
-        {!creatingWorkshop && (
-          <button className="btn-primary" onClick={() => setCreatingWorkshop(true)}>
-            <Plus size={18} /> Nuevo Taller
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Talleres Activos en {nivel}</h2>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button className="btn-accent" onClick={() => printLevelAttendance(nivel)} style={{ border: '1px solid var(--color-border)' }}>
+            <FileText size={18} /> Imprimir Asistencia {nivel} (PDF)
           </button>
-        )}
+          {!creatingWorkshop && (
+            <button className="btn-primary" onClick={() => setCreatingWorkshop(true)}>
+              <Plus size={18} /> Nuevo Taller
+            </button>
+          )}
+        </div>
       </div>
       
       <div style={{ overflowX: 'auto' }}>
@@ -1063,6 +1185,7 @@ export default function AdminDashboard() {
                     className="btn-accent" 
                     style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem', marginRight: '0.5rem' }}
                     onClick={() => {
+                      setWsActiveTab('nomina');
                       setSelectedWorkshop({ id: w.id, name: w.title, teacher: w.teachers?.name || 'Sin Asignar' });
                       fetchWorkshopStudents(w.id);
                     }}
@@ -1085,11 +1208,14 @@ export default function AdminDashboard() {
     <div className="container">
       {selectedWorkshop ? renderWorkshopDetail() : (
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-            <h1 style={{ fontSize: '1.875rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h1 style={{ fontSize: '1.875rem', display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
               <GraduationCap size={28} color="var(--color-primary)" />
               Panel de Administración
             </h1>
+            <button className="btn-primary" onClick={downloadGlobalCSV}>
+              <Download size={20} /> Descargar Consolidado Global (CSV)
+            </button>
           </div>
 
           <div className="card" style={{ marginBottom: '2rem' }}>
