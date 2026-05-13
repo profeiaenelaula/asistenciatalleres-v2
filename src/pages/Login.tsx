@@ -13,12 +13,18 @@ export default function Login() {
     if (!username || !password) return;
 
     if (username.toLowerCase() === 'admin') {
-      // Mock admin login as before or if admin has a special account,
-      // For now we preserve admin mock if requested, but let's try real Auth first:
-      // Wait, admin needs an account. If the user uses "admin", 
-      // let's keep the mock admin login for simplicity unless they created an admin acc.
       if (password === 'adminjec') {
         navigate('/admin');
+        return;
+      }
+    }
+
+    if (username.toLowerCase() === 'profejefe') {
+      if (password === 'jec2026') {
+        navigate('/profejefe');
+        return;
+      } else {
+        alert('Contraseña incorrecta');
         return;
       }
     }

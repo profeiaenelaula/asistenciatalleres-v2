@@ -29,14 +29,18 @@ interface AttendanceRecord {
   studentRecords: { id: string; name: string; status: 'present' | 'absent' }[];
 }
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ restrictedMode }: { restrictedMode?: string }) {
   const [activeTab, setActiveTab] = useState<string>('1° Medio');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [workshops, setWorkshops] = useState<any[]>([]);
   
   useEffect(() => {
-    fetchTeachers();
-    fetchWorkshops();
+    if (restrictedMode === 'profejefe') {
+      fetchCourseCounts();
+    } else {
+      fetchTeachers();
+      fetchWorkshops();
+    }
   }, []);
 
   const fetchTeachers = async () => {
@@ -1431,6 +1435,25 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
+
+  // Restricted mode for profejefe - only show Resumen Cursos
+  if (restrictedMode === 'profejefe') {
+    return (
+      <div className="container">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <h1 style={{ fontSize: '1.875rem', display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
+            <BookOpen size={28} color="var(--color-primary)" />
+            Resumen de Asistencia por Curso
+          </h1>
+        </div>
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <div style={{ paddingTop: '1rem' }}>
+            {renderResumenCursosTab()}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">

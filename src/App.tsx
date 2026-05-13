@@ -44,6 +44,7 @@ function MainLayout() {
           <Route path="/login" element={<Login />} />
           <Route path="/teacher" element={<TeacherDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/profejefe" element={<AdminDashboard restrictedMode="profejefe" />} />
         </Routes>
       </main>
     </div>
