@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Calendar, UploadCloud, GraduationCap, ChevronLeft, Check, Save, History as HistoryIcon, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, FileText, PieChart, Trash2, Edit, CheckCircle, Copy, X } from 'lucide-react';
+import { Plus, Users, Calendar, UploadCloud, GraduationCap, ChevronLeft, Check, Save, History as HistoryIcon, Calendar as CalendarIcon, ChevronDown, ChevronUp, Download, FileText, PieChart, Trash2, Edit, CheckCircle, Copy, X, BookOpen } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -313,6 +313,77 @@ export default function AdminDashboard() {
 
   const [pastRecords, setPastRecords] = useState<AttendanceRecord[]>([]);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+
+  // Resumen Cursos states
+  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
+  const [courseStudents, setCourseStudents] = useState<any[]>([]);
+  const [courseLoading, setCourseLoading] = useState(false);
+  const [courseCounts, setCourseCounts] = useState<Record<string, number>>({});
+
+  // Fetch course counts when Resumen Cursos tab is selected
+  const fetchCourseCounts = async () => {
+    const { data } = await supabase
+      .from('enrollments')
+      .select('course');
+    if (data) {
+      const counts: Record<string, number> = {};
+      data.forEach((e: any) => {
+        if (e.course) {
+          counts[e.course] = (counts[e.course] || 0) + 1;
+        }
+      });
+      setCourseCounts(counts);
+    }
+  };
+
+  const fetchCourseData = async (course: string) => {
+    setCourseLoading(true);
+    setCourseStudents([]);
+    try {
+      // Get enrollments for this course with workshop info
+      const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select('id, student_name, student_rut, course, workshops(title)')
+        .eq('course', course)
+        .order('student_name');
+
+      if (!enrollments) { setCourseLoading(false); return; }
+
+      // Get all enrollment IDs
+      const enrollmentIds = enrollments.map(e => e.id);
+
+      // Get attendance records for all these enrollments
+      const { data: records } = await supabase
+        .from('attendance_records')
+        .select('enrollment_id, status')
+        .in('enrollment_id', enrollmentIds);
+
+      // Build stats per student
+      const studentStats = enrollments.map(e => {
+        const studentRecords = records?.filter(r => r.enrollment_id === e.id) || [];
+        const presences = studentRecords.filter(r => r.status === 'present').length;
+        const absences = studentRecords.filter(r => r.status === 'absent').length;
+        const total = presences + absences;
+        const percentage = total > 0 ? Math.round((presences / total) * 100) : 0;
+        return {
+          id: e.id,
+          name: e.student_name,
+          rut: e.student_rut,
+          workshop: (e.workshops as any)?.title || 'Sin taller',
+          presences,
+          absences,
+          total,
+          percentage
+        };
+      });
+
+      setCourseStudents(studentStats);
+    } catch (error) {
+      console.error('Error fetching course data:', error);
+    } finally {
+      setCourseLoading(false);
+    }
+  };
 
   const markAllPresent = () => {
     setStudents(prev => prev.map(s => ({ ...s, status: 'present' })));
@@ -1036,6 +1107,163 @@ export default function AdminDashboard() {
     </div>
   );
 
+  const renderResumenCursosTab = () => {
+    const sortedCourses = Object.keys(courseCounts).sort();
+
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+              <BookOpen size={20} color="var(--color-primary)" />
+              Resumen de Asistencia por Curso
+            </h2>
+            <p style={{ color: 'var(--color-text-light)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>
+              {sortedCourses.length} cursos registrados. Haz clic en un curso para ver el detalle.
+            </p>
+          </div>
+        </div>
+
+        {sortedCourses.length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-light)' }}>
+            Cargando cursos...
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {sortedCourses.map(course => {
+              const isExpanded = expandedCourse === course;
+              const count = courseCounts[course] || 0;
+
+              return (
+                <div key={course} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {/* Course Header */}
+                  <button
+                    onClick={() => {
+                      if (isExpanded) {
+                        setExpandedCourse(null);
+                        setCourseStudents([]);
+                      } else {
+                        setExpandedCourse(course);
+                        fetchCourseData(course);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '1rem 1.5rem',
+                      background: isExpanded ? 'var(--color-primary)' : 'var(--color-surface)',
+                      color: isExpanded ? 'white' : 'var(--color-text)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'var(--transition)',
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      fontFamily: 'inherit'
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      {course}
+                    </span>
+                    <span style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 400,
+                      backgroundColor: isExpanded ? 'rgba(255,255,255,0.2)' : 'rgba(14, 165, 233, 0.1)',
+                      color: isExpanded ? 'white' : 'var(--color-primary)',
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '999px'
+                    }}>
+                      {count} estudiantes
+                    </span>
+                  </button>
+
+                  {/* Expanded Student List */}
+                  {isExpanded && (
+                    <div style={{ borderTop: '1px solid var(--color-border)' }}>
+                      {courseLoading ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-light)' }}>
+                          Cargando datos de asistencia...
+                        </div>
+                      ) : courseStudents.length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-light)' }}>
+                          No hay estudiantes en este curso.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '2px solid var(--color-border)', backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-light)', letterSpacing: '0.05em' }}>#</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-light)', letterSpacing: '0.05em' }}>Estudiante</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-light)', letterSpacing: '0.05em' }}>RUT</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-light)', letterSpacing: '0.05em' }}>Taller Asignado</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-light)', letterSpacing: '0.05em' }}>Presente</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-light)', letterSpacing: '0.05em' }}>Ausente</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--color-text-light)', letterSpacing: '0.05em' }}>Asistencia</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {courseStudents.map((s, idx) => {
+                                const pctColor = s.percentage >= 75 ? 'var(--color-success)' : s.percentage >= 50 ? 'var(--color-accent)' : 'var(--color-danger)';
+                                return (
+                                  <tr key={s.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--color-text-light)', fontSize: '0.875rem' }}>{idx + 1}</td>
+                                    <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{s.name}</td>
+                                    <td style={{ padding: '0.75rem 1rem', color: 'var(--color-text-light)', fontSize: '0.875rem' }}>{s.rut}</td>
+                                    <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>{s.workshop}</td>
+                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--color-success)' }}>{s.presences}</td>
+                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 600, color: 'var(--color-text-light)' }}>{s.absences}</td>
+                                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                      <div style={{
+                                        display: 'inline-block',
+                                        padding: '0.25rem 0.75rem',
+                                        borderRadius: '999px',
+                                        backgroundColor: `rgba(${pctColor === 'var(--color-success)' ? '16, 185, 129' : pctColor === 'var(--color-accent)' ? '234, 179, 8' : '239, 68, 68'}, 0.1)`,
+                                        color: pctColor,
+                                        fontWeight: 700,
+                                        fontSize: '0.875rem'
+                                      }}>
+                                        {s.percentage}%
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          {/* Course summary bar */}
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '2rem',
+                            padding: '0.75rem 1rem',
+                            backgroundColor: 'rgba(0,0,0,0.02)',
+                            borderTop: '2px solid var(--color-border)',
+                            fontSize: '0.875rem',
+                            fontWeight: 500
+                          }}>
+                            <span>Total: <strong>{courseStudents.length}</strong> estudiantes</span>
+                            <span>Promedio asistencia: <strong>
+                              {courseStudents.length > 0
+                                ? Math.round(courseStudents.reduce((sum, s) => sum + s.percentage, 0) / courseStudents.length)
+                                : 0}%
+                            </strong></span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderLevelTab = (nivel: string) => (
     <div>
       <div className="card" style={{ marginBottom: '2rem', borderTop: '4px solid var(--color-accent)' }}>
@@ -1238,10 +1466,17 @@ export default function AdminDashboard() {
               >
                 <Users size={16} /> Directorio Docentes
               </button>
+              <button 
+                className={activeTab === 'ResumenCursos' ? "btn-primary" : "btn-accent"} 
+                style={{ padding: '0.5rem 1rem', background: activeTab !== 'ResumenCursos' ? 'transparent' : '', color: activeTab !== 'ResumenCursos' ? 'var(--color-text)' : '', whiteSpace: 'nowrap' }}
+                onClick={() => { setActiveTab('ResumenCursos'); fetchCourseCounts(); }}
+              >
+                <BookOpen size={16} /> Resumen Cursos
+              </button>
             </div>
 
             <div style={{ paddingTop: '2rem' }}>
-              {activeTab === 'Docentes' ? renderDocentesTab() : renderLevelTab(activeTab)}
+              {activeTab === 'Docentes' ? renderDocentesTab() : activeTab === 'ResumenCursos' ? renderResumenCursosTab() : renderLevelTab(activeTab)}
             </div>
           </div>
         </>
