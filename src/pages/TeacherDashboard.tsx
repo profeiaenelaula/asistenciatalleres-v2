@@ -58,10 +58,15 @@ export default function TeacherDashboard() {
         return;
       }
 
+      const selectedYear = parseInt(localStorage.getItem('selected_year') || '2026');
+      const selectedSemester = parseInt(localStorage.getItem('selected_semester') || '1');
+
       const { data: workshopsData, error: wsError } = await supabase
         .from('workshops')
         .select('id, title, schedule, target_level')
-        .eq('teacher_id', user.id);
+        .eq('teacher_id', user.id)
+        .eq('year', selectedYear)
+        .eq('semester', selectedSemester);
 
       if (wsError) throw wsError;
 
@@ -70,6 +75,8 @@ export default function TeacherDashboard() {
         setSelectedWorkshop(workshopsData[0]);
         await fetchWorkshopData(workshopsData[0].id);
       } else {
+        setWorkshops([]);
+        setSelectedWorkshop(null);
         setLoading(false);
       }
     } catch (error) {
@@ -245,12 +252,38 @@ export default function TeacherDashboard() {
     );
   }
 
+  if (workshops.length === 0) {
+    return (
+      <div className="container">
+        <div className="card" style={{ padding: '3rem', textAlign: 'center', margin: '4rem auto', maxWidth: '500px' }}>
+          <h2 style={{ color: 'var(--color-primary)' }}>No hay talleres asignados</h2>
+          <p style={{ color: 'var(--color-text-light)', marginTop: '0.5rem', fontSize: '1rem', lineHeight: '1.6' }}>
+            No tienes talleres registrados para el período académico: <br/>
+            <strong>{localStorage.getItem('selected_year') || '2026'} - {localStorage.getItem('selected_semester') === '2' ? '2° Semestre' : '1° Semestre'}</strong>.
+          </p>
+          <button 
+            className="btn-primary" 
+            onClick={() => window.location.href = '/login'} 
+            style={{ marginTop: '1.5rem', display: 'inline-flex', alignSelf: 'center', padding: '0.5rem 1.5rem' }}
+          >
+            Volver al Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-            <h1 style={{ fontSize: '1.875rem', margin: 0 }}>{selectedWorkshop?.title}</h1>
+            <h1 style={{ fontSize: '1.875rem', margin: 0 }}>
+              {selectedWorkshop?.title}
+              <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--color-text-light)', marginLeft: '1rem', border: '1px solid var(--color-border)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>
+                Período: {localStorage.getItem('selected_year')} - S{localStorage.getItem('selected_semester')}
+              </span>
+            </h1>
             {workshops.length > 1 && (
               <select style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderRadius: '4px', border: '1px solid var(--color-border)' }}
                 value={selectedWorkshop?.id}

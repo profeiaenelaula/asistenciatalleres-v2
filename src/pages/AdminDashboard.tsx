@@ -33,23 +33,53 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
   const [activeTab, setActiveTab] = useState<string>('1° Medio');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [workshops, setWorkshops] = useState<any[]>([]);
+
+  // Período de edición seleccionado
+  const [selectedYear, setSelectedYear] = useState<number>(parseInt(localStorage.getItem('selected_year') || '2026'));
+  const [selectedSemester, setSelectedSemester] = useState<number>(parseInt(localStorage.getItem('selected_semester') || '1'));
+
+  // Reutilización de talleres
+  const [allPreviousWorkshops, setAllPreviousWorkshops] = useState<any[]>([]);
+  const [selectedPrevWorkshopId, setSelectedPrevWorkshopId] = useState<string>('');
   
   useEffect(() => {
+    localStorage.setItem('selected_year', selectedYear.toString());
+    localStorage.setItem('selected_semester', selectedSemester.toString());
+
     if (restrictedMode === 'profejefe') {
       fetchCourseCounts();
     } else {
       fetchTeachers();
       fetchWorkshops();
+      fetchAllPreviousWorkshops();
     }
-  }, []);
+  }, [selectedYear, selectedSemester]);
 
   const fetchTeachers = async () => {
     const { data } = await supabase.from('teachers').select('*').order('name');
     if (data) setTeachers(data);
   };
 
+  const fetchAllPreviousWorkshops = async () => {
+    try {
+      const { data } = await supabase
+        .from('workshops')
+        .select('*')
+        .order('title', { ascending: true });
+      if (data) {
+        setAllPreviousWorkshops(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchWorkshops = async () => {
-    const { data } = await supabase.from('workshops').select('*, teachers(name), enrollments(id)');
+    const { data } = await supabase
+      .from('workshops')
+      .select('*, teachers(name), enrollments(id)')
+      .eq('year', selectedYear)
+      .eq('semester', selectedSemester);
     if (data) {
       const withCount = data.map((w: any) => ({ ...w, enrolled_count: w.enrollments?.length || 0 }));
       setWorkshops(withCount);
@@ -122,9 +152,11 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
         .select(`
           date,
           observation,
-          workshops!inner (title, target_level, teachers(name)),
+          workshops!inner (title, target_level, year, semester, teachers(name)),
           attendance_records (student_name, student_rut, status)
         `)
+        .eq('workshops.year', selectedYear)
+        .eq('workshops.semester', selectedSemester)
         .order('date', { ascending: false });
 
       if (error || !sessions) {
@@ -156,7 +188,7 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Asistencia_Global_${format(new Date(), 'dd-MM-yyyy')}.csv`;
+      link.download = `Asistencia_Global_${selectedYear}_S${selectedSemester}_${format(new Date(), 'dd-MM-yyyy')}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -173,10 +205,12 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
         .select(`
           date,
           observation,
-          workshops!inner (title, target_level, teachers(name)),
+          workshops!inner (title, target_level, year, semester, teachers(name)),
           attendance_records (student_name, student_rut, status)
         `)
         .eq('workshops.target_level', nivel)
+        .eq('workshops.year', selectedYear)
+        .eq('workshops.semester', selectedSemester)
         .order('date', { ascending: false });
 
       if (error || !sessions) {
@@ -232,6 +266,70 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
   
   // Workshop Creation
   const [creatingWorkshop, setCreatingWorkshop] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newTeacherId, setNewTeacherId] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newSchedule, setNewSchedule] = useState('Miércoles 14:00 - 15:30');
+  const [newCapacity, setNewCapacity] = useState(30);
+
+  const handleSelectPrevWorkshop = (prevId: string) => {
+    setSelectedPrevWorkshopId(prevId);
+    if (!prevId) {
+      setNewTitle('');
+      setNewDescription('');
+      setNewSchedule('Miércoles 14:00 - 15:30');
+      setNewCapacity(30);
+      return;
+    }
+    const prev = allPreviousWorkshops.find(w => w.id === prevId);
+    if (prev) {
+      setNewTitle(prev.title || '');
+      setNewDescription(prev.description || '');
+      setNewSchedule(prev.schedule || '');
+      setNewCapacity(prev.capacity || 30);
+    }
+  };
+
+  const handleCreateWorkshop = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle || !newTeacherId) return;
+
+    try {
+      const { error } = await supabase
+        .from('workshops')
+        .insert([{
+          title: newTitle,
+          teacher_id: newTeacherId,
+          description: newDescription,
+          schedule: newSchedule,
+          capacity: newCapacity,
+          target_level: activeTab, // current active tab level, e.g. '1° Medio'
+          year: selectedYear,
+          semester: selectedSemester,
+          is_active: true
+        }]);
+
+      if (error) throw error;
+
+      alert('Taller creado exitosamente en ' + activeTab);
+      setCreatingWorkshop(false);
+      
+      // Reset form
+      setNewTitle('');
+      setNewTeacherId('');
+      setNewDescription('');
+      setNewSchedule('Miércoles 14:00 - 15:30');
+      setNewCapacity(30);
+      setSelectedPrevWorkshopId('');
+
+      // Reload workshops list
+      fetchWorkshops();
+      fetchAllPreviousWorkshops();
+    } catch (err: any) {
+      console.error(err);
+      alert('Error al crear taller: ' + err.message);
+    }
+  };
   
   // Docentes Creation
   const [newTeacherName, setNewTeacherName] = useState('');
@@ -328,7 +426,9 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
   const fetchCourseCounts = async () => {
     const { data } = await supabase
       .from('enrollments')
-      .select('course');
+      .select('course, workshops!inner(year, semester)')
+      .eq('workshops.year', selectedYear)
+      .eq('workshops.semester', selectedSemester);
     if (data) {
       const counts: Record<string, number> = {};
       data.forEach((e: any) => {
@@ -347,8 +447,10 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
       // Get enrollments for this course with workshop info
       const { data: enrollments } = await supabase
         .from('enrollments')
-        .select('id, student_name, student_rut, course, workshops(title)')
+        .select('id, student_name, student_rut, course, workshops!inner(title, year, semester)')
         .eq('course', course)
+        .eq('workshops.year', selectedYear)
+        .eq('workshops.semester', selectedSemester)
         .order('student_name');
 
       if (!enrollments) { setCourseLoading(false); return; }
@@ -1327,19 +1429,45 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
 
       {creatingWorkshop && (
         <div className="card" style={{ marginBottom: '2rem', backgroundColor: 'rgba(14, 165, 233, 0.05)', border: '1px solid var(--color-primary)' }}>
-          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.5rem' }}>Crear Taller en {nivel}</h2>
+          <h2 style={{ fontSize: '1.25rem', marginBottom: '1.5rem' }}>Crear Taller en {nivel} ({selectedYear} - Semestre {selectedSemester})</h2>
           <form 
             style={{ display: 'grid', gap: '1.5rem' }}
-            onSubmit={(e) => { e.preventDefault(); setCreatingWorkshop(false); }}
+            onSubmit={handleCreateWorkshop}
           >
+            <div style={{ paddingBottom: '1rem', borderBottom: '1px dashed var(--color-border)' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: 'var(--color-primary)' }}>Reutilizar taller previo</label>
+              <select 
+                value={selectedPrevWorkshopId}
+                onChange={e => handleSelectPrevWorkshop(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'white', color: 'var(--color-text)' }}
+              >
+                <option value="">-- No reutilizar (taller en blanco) --</option>
+                {allPreviousWorkshops.map(prev => (
+                  <option key={prev.id} value={prev.id}>
+                    [{prev.year} - Sem {prev.semester}] {prev.title} ({prev.target_level})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
               <div style={{ flex: '2 1 300px' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Nombre del Taller</label>
-                <input type="text" placeholder="Ej: Voleibol Avanzado" required />
+                <input 
+                  type="text" 
+                  placeholder="Ej: Voleibol Avanzado" 
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  required 
+                />
               </div>
               <div style={{ flex: '1 1 200px' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Docente Asignado</label>
-                <select required>
+                <select 
+                  value={newTeacherId}
+                  onChange={e => setNewTeacherId(e.target.value)}
+                  required
+                >
                   <option value="">Seleccione un docente...</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.id}>{t.name}</option>
@@ -1347,14 +1475,39 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
                 </select>
               </div>
             </div>
-            
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Lista de Estudiantes (Curso)</label>
-              <div style={{ border: '2px dashed var(--color-primary)', borderRadius: 'var(--border-radius)', padding: '2rem', textAlign: 'center', backgroundColor: 'var(--color-surface)', cursor: 'pointer' }}>
-                <UploadCloud size={32} style={{ color: 'var(--color-primary)', margin: '0 auto 0.5rem' }} />
-                <p style={{ margin: 0, fontWeight: 500 }}>Arrastra tu archivo Excel/CSV aquí</p>
-                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-light)' }}>para cargar la nómina de estudiantes</p>
+
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 200px' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Horario</label>
+                <input 
+                  type="text" 
+                  placeholder="Ej: Miércoles 14:00 - 15:30" 
+                  value={newSchedule}
+                  onChange={e => setNewSchedule(e.target.value)}
+                  required 
+                />
               </div>
+              <div style={{ flex: '1 1 100px' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Cupo (Capacidad)</label>
+                <input 
+                  type="number" 
+                  placeholder="Ej: 30" 
+                  value={newCapacity}
+                  onChange={e => setNewCapacity(parseInt(e.target.value) || 0)}
+                  required 
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Descripción</label>
+              <textarea 
+                placeholder="Descripción de la actividad..." 
+                value={newDescription}
+                onChange={e => setNewDescription(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'white', color: 'var(--color-text)', fontFamily: 'inherit' }}
+                rows={3}
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
@@ -1445,6 +1598,26 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
             <BookOpen size={28} color="var(--color-primary)" />
             Resumen de Asistencia por Curso
           </h1>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-light)' }}>Período:</span>
+            <select 
+              value={selectedYear} 
+              onChange={e => setSelectedYear(parseInt(e.target.value))}
+              style={{ padding: '0.375rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'white', color: 'var(--color-text)' }}
+            >
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+            </select>
+            <select 
+              value={selectedSemester} 
+              onChange={e => setSelectedSemester(parseInt(e.target.value))}
+              style={{ padding: '0.375rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'white', color: 'var(--color-text)' }}
+            >
+              <option value="1">1° Semestre</option>
+              <option value="2">2° Semestre</option>
+            </select>
+          </div>
         </div>
         <div className="card" style={{ marginBottom: '2rem' }}>
           <div style={{ paddingTop: '1rem' }}>
@@ -1460,10 +1633,32 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
       {selectedWorkshop ? renderWorkshopDetail() : (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <h1 style={{ fontSize: '1.875rem', display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
-              <GraduationCap size={28} color="var(--color-primary)" />
-              Panel de Administración
-            </h1>
+            <div>
+              <h1 style={{ fontSize: '1.875rem', display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
+                <GraduationCap size={28} color="var(--color-primary)" />
+                Panel de Administración
+              </h1>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-light)' }}>Período en edición:</span>
+                <select 
+                  value={selectedYear} 
+                  onChange={e => setSelectedYear(parseInt(e.target.value))}
+                  style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.875rem', backgroundColor: 'white', color: 'var(--color-text)' }}
+                >
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+                <select 
+                  value={selectedSemester} 
+                  onChange={e => setSelectedSemester(parseInt(e.target.value))}
+                  style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.875rem', backgroundColor: 'white', color: 'var(--color-text)' }}
+                >
+                  <option value="1">1° Semestre</option>
+                  <option value="2">2° Semestre</option>
+                </select>
+              </div>
+            </div>
             <button className="btn-primary" onClick={downloadGlobalCSV}>
               <Download size={20} /> Descargar Consolidado Global (CSV)
             </button>
