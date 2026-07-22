@@ -7,15 +7,9 @@ export default function Login() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [year, setYear] = useState('2026');
-  const [semester, setSemester] = useState('1');
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !password) return;
-
-    localStorage.setItem('selected_year', year);
-    localStorage.setItem('selected_semester', semester);
 
     if (username.toLowerCase() === 'admin') {
       if (password === 'adminjec') {
@@ -83,33 +77,7 @@ export default function Login() {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="year" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>Año</label>
-              <select 
-                id="year" 
-                value={year} 
-                onChange={(e) => setYear(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'white', color: 'var(--color-text)', fontFamily: 'inherit' }}
-              >
-                <option value="2025">2025</option>
-                <option value="2026">2026</option>
-                <option value="2027">2027</option>
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="semester" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>Semestre</label>
-              <select 
-                id="semester" 
-                value={semester} 
-                onChange={(e) => setSemester(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'white', color: 'var(--color-text)', fontFamily: 'inherit' }}
-              >
-                <option value="1">1° Semestre</option>
-                <option value="2">2° Semestre</option>
-              </select>
-            </div>
-          </div>
+
 
           <button type="submit" className="btn-primary" style={{ marginTop: '1rem' }}>
             <LogIn size={20} />

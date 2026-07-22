@@ -45,9 +45,14 @@ export default function TeacherDashboard() {
   const [pastRecords, setPastRecords] = useState<AttendanceRecord[]>([]);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
+  const [selectedYear, setSelectedYear] = useState<number>(parseInt(localStorage.getItem('selected_year') || '2026'));
+  const [selectedSemester, setSelectedSemester] = useState<number>(parseInt(localStorage.getItem('selected_semester') || '1'));
+
   useEffect(() => {
+    localStorage.setItem('selected_year', selectedYear.toString());
+    localStorage.setItem('selected_semester', selectedSemester.toString());
     fetchInitialData();
-  }, []);
+  }, [selectedYear, selectedSemester]);
 
   const fetchInitialData = async () => {
     try {
@@ -57,9 +62,6 @@ export default function TeacherDashboard() {
         window.location.href = '/login';
         return;
       }
-
-      const selectedYear = parseInt(localStorage.getItem('selected_year') || '2026');
-      const selectedSemester = parseInt(localStorage.getItem('selected_semester') || '1');
 
       const { data: workshopsData, error: wsError } = await supabase
         .from('workshops')
@@ -252,22 +254,42 @@ export default function TeacherDashboard() {
     );
   }
 
+  const periodSelector = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem', background: 'var(--color-surface)', padding: '1rem 1.5rem', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+      <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--color-text)' }}>Panel Docente</h2>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <span style={{ fontWeight: 500, color: 'var(--color-text-light)' }}>Período:</span>
+        <select 
+          value={selectedYear} 
+          onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+          style={{ padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-background)', fontSize: '0.9rem' }}
+        >
+          {[2024, 2025, 2026, 2027].map(year => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+        <select 
+          value={selectedSemester} 
+          onChange={(e) => setSelectedSemester(parseInt(e.target.value))}
+          style={{ padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-background)', fontSize: '0.9rem' }}
+        >
+          <option value={1}>1° Semestre</option>
+          <option value={2}>2° Semestre</option>
+        </select>
+      </div>
+    </div>
+  );
+
   if (workshops.length === 0) {
     return (
       <div className="container">
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', margin: '4rem auto', maxWidth: '500px' }}>
+        {periodSelector}
+        <div className="card" style={{ padding: '3rem', textAlign: 'center', margin: '2rem auto', maxWidth: '500px' }}>
           <h2 style={{ color: 'var(--color-primary)' }}>No hay talleres asignados</h2>
           <p style={{ color: 'var(--color-text-light)', marginTop: '0.5rem', fontSize: '1rem', lineHeight: '1.6' }}>
-            No tienes talleres registrados para el período académico: <br/>
-            <strong>{localStorage.getItem('selected_year') || '2026'} - {localStorage.getItem('selected_semester') === '2' ? '2° Semestre' : '1° Semestre'}</strong>.
+            No tienes talleres registrados para el período académico seleccionado: <br/>
+            <strong>{selectedYear} - {selectedSemester === 2 ? '2° Semestre' : '1° Semestre'}</strong>.
           </p>
-          <button 
-            className="btn-primary" 
-            onClick={() => window.location.href = '/login'} 
-            style={{ marginTop: '1.5rem', display: 'inline-flex', alignSelf: 'center', padding: '0.5rem 1.5rem' }}
-          >
-            Volver al Login
-          </button>
         </div>
       </div>
     );
@@ -275,14 +297,12 @@ export default function TeacherDashboard() {
 
   return (
     <div className="container">
+      {periodSelector}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
             <h1 style={{ fontSize: '1.875rem', margin: 0 }}>
               {selectedWorkshop?.title}
-              <span style={{ fontSize: '0.95rem', fontWeight: 500, color: 'var(--color-text-light)', marginLeft: '1rem', border: '1px solid var(--color-border)', padding: '0.25rem 0.5rem', borderRadius: '4px' }}>
-                Período: {localStorage.getItem('selected_year')} - S{localStorage.getItem('selected_semester')}
-              </span>
             </h1>
             {workshops.length > 1 && (
               <select style={{ padding: '0.25rem 0.5rem', fontSize: '0.875rem', borderRadius: '4px', border: '1px solid var(--color-border)' }}
