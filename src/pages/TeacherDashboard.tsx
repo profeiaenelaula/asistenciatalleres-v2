@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Check, Users, Calendar as CalendarIcon, History, Loader2, ChevronDown, ChevronUp, Trash2, Edit, CheckCircle } from 'lucide-react';
+import { Save, Check, Users, Calendar as CalendarIcon, History, Loader2, ChevronDown, ChevronUp, Trash2, Edit, CheckCircle, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,8 @@ interface Student {
   rut: string;
   status: 'present' | 'absent' | null;
   enrollment_id: string;
+  final_grade: string;
+  grade_observation: string;
 }
 
 interface Workshop {
@@ -29,7 +31,7 @@ interface AttendanceRecord {
 }
 
 export default function TeacherDashboard() {
-  const [activeTab, setActiveTab] = useState<'tomar' | 'historial'>('tomar');
+  const [activeTab, setActiveTab] = useState<'tomar' | 'historial' | 'calificar'>('tomar');
   const [loading, setLoading] = useState(true);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [selectedWorkshop, setSelectedWorkshop] = useState<Workshop | null>(null);
@@ -91,7 +93,7 @@ export default function TeacherDashboard() {
     try {
       const { data: enrollments, error: enError } = await supabase
         .from('enrollments')
-        .select('id, student_name, student_rut')
+        .select('id, student_name, student_rut, final_grade, grade_observation')
         .eq('workshop_id', workshopId);
 
       if (enError) throw enError;
@@ -101,7 +103,9 @@ export default function TeacherDashboard() {
         name: e.student_name,
         rut: e.student_rut,
         status: null,
-        enrollment_id: e.id
+        enrollment_id: e.id,
+        final_grade: e.final_grade || '',
+        grade_observation: e.grade_observation || ''
       }));
 
       setStudents(formattedStudents);
@@ -245,6 +249,32 @@ export default function TeacherDashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSaveGrades = async () => {
+    if (!selectedWorkshop) return;
+    setSaved(true);
+    try {
+      const updates = students.map(s => {
+        return supabase
+          .from('enrollments')
+          .update({ final_grade: s.final_grade, grade_observation: s.grade_observation })
+          .eq('id', s.enrollment_id);
+      });
+      
+      const results = await Promise.all(updates);
+      const errors = results.filter(r => r.error);
+      
+      if (errors.length > 0) {
+        throw new Error('Hubo un problema al guardar algunas calificaciones.');
+      }
+      
+      alert('Calificaciones guardadas con éxito.');
+      setSaved(false);
+    } catch (error: any) {
+      alert('Error guardando calificaciones: ' + error.message);
+      setSaved(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '60vh', gap: '1rem' }}>
@@ -329,6 +359,9 @@ export default function TeacherDashboard() {
         </button>
         <button className={activeTab === 'historial' ? "btn-primary" : "btn-accent"} style={{ padding: '0.5rem 1rem', background: activeTab !== 'historial' ? 'transparent' : '', color: activeTab !== 'historial' ? 'var(--color-text)' : '' }} onClick={() => setActiveTab('historial')}>
           <History size={18} /> Historial
+        </button>
+        <button className={activeTab === 'calificar' ? "btn-primary" : "btn-accent"} style={{ padding: '0.5rem 1rem', background: activeTab !== 'calificar' ? 'transparent' : '', color: activeTab !== 'calificar' ? 'var(--color-text)' : '' }} onClick={() => setActiveTab('calificar')}>
+          <Star size={18} /> Calificación
         </button>
       </div>
 
@@ -461,6 +494,65 @@ export default function TeacherDashboard() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'calificar' && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Calificaciones de Fin de Semestre</h2>
+            <button className="btn-primary" onClick={handleSaveGrades} disabled={saved}>
+              {saved ? <><Loader2 className="animate-spin" size={18} /> Guardando...</> : <><Save size={18} /> Guardar Calificaciones</>}
+            </button>
+          </div>
+          
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Estudiante</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>RUT</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'center', width: '120px' }}>Nota Final</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Observación (Opcional)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student, index) => (
+                  <tr key={student.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{student.name}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: 'var(--color-text-light)' }}>{student.rut}</td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
+                      <input 
+                        type="number" 
+                        min="1.0" max="7.0" step="0.1"
+                        placeholder="Ej: 6.5"
+                        value={student.final_grade || ''}
+                        onChange={(e) => {
+                          const newStudents = [...students];
+                          newStudents[index].final_grade = e.target.value;
+                          setStudents(newStudents);
+                        }}
+                        style={{ width: '100%', padding: '0.4rem', borderRadius: '4px', border: '1px solid var(--color-border)', textAlign: 'center' }}
+                      />
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
+                      <input 
+                        type="text" 
+                        placeholder="Comentarios adicionales..."
+                        value={student.grade_observation || ''}
+                        onChange={(e) => {
+                          const newStudents = [...students];
+                          newStudents[index].grade_observation = e.target.value;
+                          setStudents(newStudents);
+                        }}
+                        style={{ width: '100%', padding: '0.4rem', borderRadius: '4px', border: '1px solid var(--color-border)' }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -153,7 +153,7 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
           date,
           observation,
           workshops!inner (title, target_level, year, semester, teachers(name)),
-          attendance_records (student_name, student_rut, status)
+          attendance_records (student_name, student_rut, status, enrollments (final_grade, grade_observation))
         `)
         .eq('workshops.year', selectedYear)
         .eq('workshops.semester', selectedSemester)
@@ -178,7 +178,9 @@ export default function AdminDashboard({ restrictedMode }: { restrictedMode?: st
             'RUT Estudiante': r.student_rut,
             'Nombre Estudiante': r.student_name,
             Asistencia: r.status === 'present' ? 'Presente' : 'Ausente',
-            Observación: s.observation || ''
+            Observación: s.observation || '',
+            'Nota Final': r.enrollments?.final_grade || '',
+            'Observación Nota': r.enrollments?.grade_observation || ''
           });
         });
       });
